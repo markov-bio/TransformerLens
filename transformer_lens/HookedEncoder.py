@@ -106,6 +106,7 @@ class HookedEncoder(HookedRootModule):
         return_type: Optional[str] = "logits",
         token_type_ids: Optional[Int[torch.Tensor, "batch pos"]] = None,
         one_zero_attention_mask: Optional[Int[torch.Tensor, "batch pos"]] = None,
+        stop_at_layer: Optional[int] = None,
     ) -> Optional[Float[torch.Tensor, "batch pos d_vocab"]]:
         """Input must be a batch of tokens. Strings and lists of strings are not yet supported.
 
@@ -114,6 +115,14 @@ class HookedEncoder(HookedRootModule):
         token_type_ids Optional[torch.Tensor]: Binary ids indicating whether a token belongs to sequence A or B. For example, for two sentences: "[CLS] Sentence A [SEP] Sentence B [SEP]", token_type_ids would be [0, 0, ..., 0, 1, ..., 1, 1]. `0` represents tokens from Sentence A, `1` from Sentence B. If not provided, BERT assumes a single sequence input. Typically, shape is (batch_size, sequence_length).
 
         one_zero_attention_mask: Optional[torch.Tensor]: A binary mask which indicates which tokens should be attended to (1) and which should be ignored (0). Primarily used for padding variable-length sentences in a batch. For instance, in a batch with sentences of differing lengths, shorter sentences are padded with 0s on the right. If not provided, the model assumes all tokens should be attended to.
+        
+        stop_at_layer Optional[int]: If not None, stop the forward pass at the specified layer.
+                Exclusive - ie, stop_at_layer = 0 will only run the embedding layer, stop_at_layer =
+                1 will run the embedding layer and the first transformer block, etc. Supports
+                negative indexing. Useful for analysis of intermediate layers, eg finding neuron
+                activations in layer 3 of a 24 layer model. Defaults to None (run the full model).
+                If not None, we return the last residual stream computed.
+            
         """
 
         tokens = input
@@ -135,8 +144,16 @@ class HookedEncoder(HookedRootModule):
             torch.where(mask == 1, large_negative_number, 0) if mask is not None else None
         )
 
-        for block in self.blocks:
+        n_layers = len(self.blocks) if stop_at_layer is None else stop_at_layer
+    
+        for i, block in enumerate(self.blocks[:n_layers]):
             resid = block(resid, additive_attention_mask)
+            if i + 1 == n_layers:
+                break
+    
+        if stop_at_layer is not None:
+            return resid # we don't need the MLM head
+    
         resid = self.mlm_head(resid)
 
         if return_type is None:
@@ -162,6 +179,7 @@ class HookedEncoder(HookedRootModule):
         *model_args,
         return_cache_object: bool = True,
         remove_batch_dim: bool = False,
+        start_at_layer: Optional[int] = None,
         **kwargs,
     ) -> Tuple[
         Float[torch.Tensor, "batch pos d_vocab"],
