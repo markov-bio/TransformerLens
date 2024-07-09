@@ -24,7 +24,10 @@ from transformer_lens.FactoredMatrix import FactoredMatrix
 from transformer_lens.hook_points import HookedRootModule, HookPoint
 from transformer_lens.HookedTransformerConfig import HookedTransformerConfig
 from transformer_lens.utilities import devices
-
+from transformer_lens.utils import (
+    USE_DEFAULT_VALUE
+)
+from transformer_lens.past_key_value_caching import HookedTransformerKeyValueCache
 
 class HookedEncoder(HookedRootModule):
     """
@@ -107,6 +110,15 @@ class HookedEncoder(HookedRootModule):
         token_type_ids: Optional[Int[torch.Tensor, "batch pos"]] = None,
         one_zero_attention_mask: Optional[Int[torch.Tensor, "batch pos"]] = None,
         stop_at_layer: Optional[int] = None,
+
+        # we're going to add a bunch of optional arguments to satisfy SAE_lens
+        # hopefully this doesn't break anything
+
+        prepend_bos: Optional[Union[bool, None]] = USE_DEFAULT_VALUE,
+        padding_side: Optional[Literal["left", "right"]] = USE_DEFAULT_VALUE,
+        start_at_layer: Optional[int] = None,
+        shortformer_pos_embed: Optional[Float[torch.Tensor, "batch pos d_model"]] = None,
+        past_kv_cache: Optional[HookedTransformerKeyValueCache] = None,
     ) -> Optional[Float[torch.Tensor, "batch pos d_vocab"]]:
         """Input must be a batch of tokens. Strings and lists of strings are not yet supported.
 
@@ -125,6 +137,7 @@ class HookedEncoder(HookedRootModule):
             
         """
 
+        # no idea why they didn't make this consistent with HookedTransformer, which takes in "tokens"
         tokens = input
 
         if tokens.device.type != self.cfg.device:
@@ -179,7 +192,7 @@ class HookedEncoder(HookedRootModule):
         *model_args,
         return_cache_object: bool = True,
         remove_batch_dim: bool = False,
-        start_at_layer: Optional[int] = None,
+        stop_at_layer: Optional[int] = None,
         **kwargs,
     ) -> Tuple[
         Float[torch.Tensor, "batch pos d_vocab"],
