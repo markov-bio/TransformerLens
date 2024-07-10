@@ -16,6 +16,7 @@ from huggingface_hub import HfApi
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
+    AutoModelForMaskedLM
     BertForPreTraining,
     T5ForConditionalGeneration,
 )
@@ -45,6 +46,7 @@ from transformer_lens.pretrained.weight_conversions import (
 )
 
 OFFICIAL_MODEL_NAMES = [
+    "markov-bio/dna-sae", # we'll probably need to give the particular model size
     "gpt2",
     "gpt2-medium",
     "gpt2-large",
@@ -967,6 +969,8 @@ def convert_hf_model_config(model_name: str, **kwargs):
         }
         rotary_pct = hf_config.rotary_pct
         cfg_dict["rotary_dim"] = round(rotary_pct * cfg_dict["d_head"])
+    
+    # here we use our custom config for DNA-SAE
     elif architecture == "BertForMaskedLM":
         cfg_dict = {
             "d_model": hf_config.hidden_size,
@@ -977,8 +981,14 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "n_ctx": hf_config.max_position_embeddings,
             "eps": hf_config.layer_norm_eps,
             "d_vocab": hf_config.vocab_size,
+            "d_vocab_out": hf_config.vocab_size,
             "act_fn": "gelu",
             "attention_dir": "bidirectional",
+            "normalization_type": "LN", # this is correct?
+            "positional_embedding_type": hf_config.position_embedding_type,
+            "initializer_range": hf_config.initializer_range,
+            "eps": hf_config.layer_norm_eps,
+            "use_attn_scale": True,
         }
     elif architecture == "MistralForCausalLM":
         cfg_dict = {
@@ -1615,6 +1625,15 @@ def get_pretrained_state_dict(
             huggingface_token = os.environ.get("HF_TOKEN", None)
             if official_model_name in NON_HF_HOSTED_MODEL_NAMES:
                 raise NotImplementedError("Model not hosted on HuggingFace, must pass in hf_model")
+            
+            # this is where we'll need our custom weight-loading 
+            elif "dna" in official_model_name:
+                hf_model = AutoModelForMaskedLM.from_pretrained(
+                    official_model_name,
+                    torch_dtype=dtype,
+                    token=huggingface_token,
+                    **kwargs
+                )
             elif "bert" in official_model_name:
                 hf_model = BertForPreTraining.from_pretrained(
                     official_model_name,
@@ -1751,3 +1770,5 @@ def get_basic_config(model_name: str, **kwargs) -> Config:
             ]
         }
     )
+
+# %%
