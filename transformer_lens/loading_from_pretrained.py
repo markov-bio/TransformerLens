@@ -16,7 +16,7 @@ from huggingface_hub import HfApi
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    AutoModelForMaskedLM
+    AutoModelForMaskedLM,
     BertForPreTraining,
     T5ForConditionalGeneration,
 )
