@@ -17,7 +17,7 @@ from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoModelForMaskedLM,
-    BertForPreTraining,
+    BertForMaskedLM,
     T5ForConditionalGeneration,
 )
 
@@ -1635,7 +1635,7 @@ def get_pretrained_state_dict(
                     **kwargs
                 )
             elif "bert" in official_model_name:
-                hf_model = BertForPreTraining.from_pretrained(
+                hf_model = BertForMaskedLM.from_pretrained(
                     official_model_name,
                     torch_dtype=dtype,
                     token=huggingface_token,
